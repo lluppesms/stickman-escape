@@ -282,6 +282,8 @@ let phil, enemies, projs, boss, checkActivated, checkpointRespawn;
 let bossIntroTimer = 0, levelClearTimer = 0, deathTimer = 0;
 let mechFinalTriggered = false;
 let paused = false, pauseSelect = 0, pauseKeyHeld = false;
+let combo = 0, comboTimer = 0;
+const COMBO_WINDOW = 3.0, COMBO_MAX = 10;
 
 const PHIL_W=22, PHIL_H=44, ATK_RANGE=60, ATK_DUR=0.22, ATK_CD=0.38, INV_DUR=1.1;
 
@@ -313,7 +315,7 @@ function startLevel(){
   checkActivated = false;
   checkpointRespawn = null;
   parts     = [];
-  cam.x=0; cam.y=0; shake=0; paused=false;
+  cam.x=0; cam.y=0; shake=0; paused=false; combo=0; comboTimer=0;
   initPhil(levelData.playerStart.x, levelData.playerStart.y);
 
   if(levelData.isBoss){
@@ -375,6 +377,7 @@ function updatePhil(dt){
   if(phil.atkTimer>0) phil.atkTimer-=dt; else phil.attacking=false;
   if(phil.atkCD>0) phil.atkCD-=dt;
   if(phil.invTimer>0) phil.invTimer-=dt;
+  if(comboTimer>0){ comboTimer-=dt; if(comboTimer<=0) combo=0; }
 
   moveCollide(phil, levelData.plats, dt);
   if(phil.onGround&&!phil.wasOnGround){ dustPuff(phil.x+phil.w/2,phil.y+phil.h); SFX.land(); }
@@ -458,6 +461,7 @@ function philTakeDmg(amt){
   if(phil.invTimer>0) return;
   phil.health=Math.max(0,phil.health-amt);
   phil.invTimer=INV_DUR; shake=0.4;
+  combo=0; comboTimer=0;
   burst(phil.x+phil.w/2,phil.y+phil.h/2,'#ff4444',10,120);
   SFX.hit();
   if(phil.health<=0) philDie();
@@ -467,6 +471,7 @@ function philDie(){
   phil.dead=true; phil.deathTimer=1.8;
   burst(phil.x+phil.w/2,phil.y+phil.h/2,'#4488ff',20,150,400);
   SFX.die(); shake=0.7;
+  combo=0; comboTimer=0;
   G.lives--;
   if(G.lives>0){
     setTimeout(()=>{ respawnPhil(); },1800);
@@ -541,9 +546,14 @@ function hitEnemy(e, dmg){
   burst(e.x+e.w/2,e.y+e.h/2,'#ff8844',8,110,200); SFX.hit();
   if(e.health<=0){
     e.dead=true; e.deathTimer=1.2;
-    const pts=e.type==='archer'?150:100;
+    combo=Math.min(combo+1,COMBO_MAX); comboTimer=COMBO_WINDOW;
+    const base=e.type==='archer'?150:100;
+    const pts=base*combo;
     G.score+=pts;
-    scorePopup(e.x+e.w/2,e.y-20,'+'+pts,'#ffd700');
+    const popCol=combo>=5?'#ff88ff':combo>=3?'#ffaa00':'#ffd700';
+    const popTxt=combo>1?'+'+pts+' ×'+combo:'+'+pts;
+    scorePopup(e.x+e.w/2,e.y-20,popTxt,popCol);
+    if(combo>=3){ burst(e.x+e.w/2,e.y+e.h/2,combo>=5?'#ff88ff':'#ffaa00',16,150,300); SFX.coin(); }
     burst(e.x+e.w/2,e.y+e.h/2,'#ff4422',14,130,350); SFX.die();
   }
 }
@@ -1087,6 +1097,19 @@ function drawHUD(){
     const bnames={giant:'Stickman Giant',anaconda:'Green Anaconda',lizard:'Giant Robot Lizard',mech:'Giant Stickman Mech'};
     ctx.fillStyle='#fff'; ctx.font='bold 11px monospace'; ctx.textAlign='center';
     ctx.fillText(bnames[boss.type]||'BOSS',W/2,by+10); ctx.textAlign='left';
+  }
+
+  // Combo indicator
+  if(combo>=2){
+    const cx2=W/2, cy2=H-30;
+    const frac=Math.min(1,comboTimer/COMBO_WINDOW);
+    const col=combo>=5?'#ff88ff':combo>=3?'#ffaa00':'#ffdd44';
+    ctx.fillStyle='rgba(0,0,0,0.5)'; ctx.fillRect(cx2-60,cy2-18,120,8);
+    ctx.fillStyle=col; ctx.fillRect(cx2-60,cy2-18,120*frac,8);
+    ctx.fillStyle=col; ctx.font='bold 16px monospace'; ctx.textAlign='center';
+    ctx.shadowColor=col; ctx.shadowBlur=8;
+    ctx.fillText('COMBO ×'+combo,cx2,cy2-22); ctx.shadowBlur=0;
+    ctx.textAlign='left';
   }
 
   // Checkpoint indicator
