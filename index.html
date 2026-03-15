@@ -85,14 +85,17 @@ const SFX = {
 // ══════════════════════════════════════════════════════
 //  INPUT
 // ══════════════════════════════════════════════════════
-const keys={}, touches={L:false,R:false,J:false,A:false,S:false};
+const keys={}, touches={L:false,R:false,J:false,A:false,S:false,start:false};
+const isTouchDevice='ontouchstart' in window;
 document.addEventListener('keydown',e=>{ initAC(); keys[e.code]=true; if(['Space','ArrowUp','ArrowDown'].includes(e.code))e.preventDefault(); });
 document.addEventListener('keyup',e=>keys[e.code]=false);
+canvas.addEventListener('touchstart',e=>{ e.preventDefault(); initAC(); touches.start=true; },{passive:false});
+canvas.addEventListener('touchend',()=>{ touches.start=false; });
 function bindT(id,p){ const el=document.getElementById(id);
   el.addEventListener('touchstart',e=>{e.preventDefault();initAC();touches[p]=true},{passive:false});
   el.addEventListener('touchend',e=>{e.preventDefault();touches[p]=false},{passive:false});
   el.addEventListener('touchcancel',()=>touches[p]=false); }
-if('ontouchstart' in window){ document.getElementById('touch').style.display='block';
+if(isTouchDevice){ document.getElementById('touch').style.display='block';
   bindT('tL','L');bindT('tR','R');bindT('tJ','J');bindT('tA','A');bindT('tS','S'); }
 const In={
   left:  ()=>keys['ArrowLeft'] ||keys['KeyA']||touches.L,
@@ -100,8 +103,8 @@ const In={
   jump:  ()=>keys['Space']||keys['ArrowUp']||keys['KeyW']||touches.J,
   atk:   ()=>keys['KeyZ']||keys['KeyJ']||touches.A,
   shield:()=>keys['KeyX']||keys['KeyK']||keys['ShiftLeft']||keys['ShiftRight']||touches.S,
-  start: ()=>keys['Enter']||keys['Space'],
-  restart:()=>keys['KeyR']||keys['Enter'],
+  start: ()=>keys['Enter']||keys['Space']||touches.start,
+  restart:()=>keys['KeyR']||keys['Enter']||touches.start,
   pause:  ()=>keys['Escape']||keys['KeyP'],
 };
 
@@ -1521,7 +1524,7 @@ function drawTitle(){
   ctx.fillStyle='#667766'; ctx.font='13px monospace';
   ctx.fillText('World 1: Forest  •  World 2: Desert  •  Final Boss: Stickman Mech',W/2,330);
 
-  if(Math.sin(frameN*.06)>0){ ctx.fillStyle='#ffffff'; ctx.font='bold 18px monospace'; ctx.fillText('PRESS ENTER OR SPACE TO BEGIN',W/2,410); }
+  if(Math.sin(frameN*.06)>0){ ctx.fillStyle='#ffffff'; ctx.font='bold 18px monospace'; ctx.fillText(isTouchDevice?'TAP TO BEGIN':'PRESS ENTER OR SPACE TO BEGIN',W/2,410); }
   ctx.fillStyle='#556644'; ctx.font='13px monospace'; ctx.fillText('HIGH SCORE: '+G.highScore,W/2,450);
   ctx.fillStyle='#445544'; ctx.font='11px monospace'; ctx.fillText('WASD/Arrows: Move   Space: Jump   Z: Sword   X: Shield (hold)',W/2,490);
   ctx.textAlign='left';
@@ -1573,7 +1576,7 @@ function drawGameOver(){
   ctx.fillText('CAPTURED!',W/2,H/2-70); ctx.shadowBlur=0;
   ctx.fillStyle='#bbaaaa'; ctx.font='18px monospace'; ctx.fillText('Phil used all his lives and was recaptured...',W/2,H/2-10);
   ctx.fillStyle='#ffd700'; ctx.font='20px monospace'; ctx.fillText('Score: '+G.score,W/2,H/2+35);
-  if(Math.sin(frameN*.07)>0){ ctx.fillStyle='#ccaaff'; ctx.font='bold 18px monospace'; ctx.fillText('PRESS R OR ENTER TO TRY AGAIN',W/2,H/2+85); }
+  if(Math.sin(frameN*.07)>0){ ctx.fillStyle='#ccaaff'; ctx.font='bold 18px monospace'; ctx.fillText(isTouchDevice?'TAP TO TRY AGAIN':'PRESS R OR ENTER TO TRY AGAIN',W/2,H/2+85); }
   ctx.textAlign='left';
 }
 
@@ -1588,7 +1591,7 @@ function drawWin(){
   ctx.fillStyle='#ffd700'; ctx.font='bold 26px monospace'; ctx.fillText('Final Score: '+G.score,W/2,290);
   if(G.score>=G.highScore){ ctx.fillStyle='#ff88ff'; ctx.font='bold 20px monospace'; ctx.fillText('★ NEW HIGH SCORE ★',W/2,335); }
   else { ctx.fillStyle='#667766'; ctx.font='16px monospace'; ctx.fillText('High Score: '+G.highScore,W/2,335); }
-  if(Math.sin(frameN*.06)>0){ ctx.fillStyle='#ffffff'; ctx.font='bold 18px monospace'; ctx.fillText('PRESS R OR ENTER TO PLAY AGAIN',W/2,410); }
+  if(Math.sin(frameN*.06)>0){ ctx.fillStyle='#ffffff'; ctx.font='bold 18px monospace'; ctx.fillText(isTouchDevice?'TAP TO PLAY AGAIN':'PRESS R OR ENTER TO PLAY AGAIN',W/2,410); }
   ctx.textAlign='left';
 }
 
