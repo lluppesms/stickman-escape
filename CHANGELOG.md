@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- Heavy Soldier enemy with a frontal shield block, 4-hit health pool, and a 50% health-drop chance
+- Bomb Thrower enemy that lobs destroyable arcing bombs with a small 1-heart blast radius
+- Stickman Glider enemy with patrol/chase/dive behavior and jump-attack-only sword vulnerability
+- Procedural unlock rules and score values for the expanded standard enemy roster
+
 ## [v1.0.0] — 2026-03-14
 
 Initial release.

@@ -80,6 +80,8 @@ const SFX = {
   win:     ()=>{ [523,659,784,1047,1319,1568].forEach((f,i)=>setTimeout(()=>tone(f,0.12,0.35,'sine'),i*150)); },
   bossHit: ()=>{ noise(0.2,0.1); tone(80,0.1,0.2,'sawtooth',40); },
   checkpoint:()=>{ tone(440,0.08,0.1,'sine'); setTimeout(()=>tone(660,0.08,0.15,'sine'),110); },
+  bomb:    ()=>{ noise(0.22,0.16); tone(120,0.08,0.15,'sawtooth',70); },
+  pickup:  ()=>{ tone(660,0.08,0.12,'sine'); setTimeout(()=>tone(880,0.07,0.16,'sine'),70); },
 };
 
 // ══════════════════════════════════════════════════════
@@ -87,7 +89,14 @@ const SFX = {
 // ══════════════════════════════════════════════════════
 const keys={}, touches={L:false,R:false,J:false,A:false,S:false,start:false};
 const isTouchDevice='ontouchstart' in window;
-document.addEventListener('keydown',e=>{ initAC(); keys[e.code]=true; if(['Space','ArrowUp','ArrowDown'].includes(e.code))e.preventDefault(); });
+const WORLD_CHEAT='xavier', WORLD_CHEAT_TIMEOUT=1400;
+let worldCheatBuffer='', worldCheatLastAt=0;
+function resetWorldCheat(){ worldCheatBuffer=''; worldCheatLastAt=0; }
+document.addEventListener('keydown',e=>{
+  initAC(); keys[e.code]=true;
+  if(['Space','ArrowUp','ArrowDown'].includes(e.code))e.preventDefault();
+  handleWorldCheatKey(e);
+});
 document.addEventListener('keyup',e=>keys[e.code]=false);
 canvas.addEventListener('touchstart',e=>{ e.preventDefault(); initAC(); touches.start=true; },{passive:false});
 canvas.addEventListener('touchend',()=>{ touches.start=false; });
@@ -190,6 +199,49 @@ const WORLDS = {
 //  LEVEL GENERATION
 // ══════════════════════════════════════════════════════
 const GROUND_Y = 460;
+const ENEMY_CFG = {
+  soldier:{ w:22,h:42,maxHealth:2,score:100,patrolSpeed:80,chaseSpeed:145,detect:200,color:'#3a5a10' },
+  archer: { w:22,h:42,maxHealth:2,score:150,patrolSpeed:80,chaseSpeed:48, detect:200,color:'#4a6a20', isArcher:true },
+  heavy:  { w:26,h:46,maxHealth:4,score:200,patrolSpeed:52,chaseSpeed:84, detect:220,color:'#57411d', shieldColor:'#7f632d' },
+  bomber: { w:22,h:42,maxHealth:2,score:175,patrolSpeed:72,chaseSpeed:92, detect:260,color:'#6a4324' },
+  glider: { w:24,h:34,maxHealth:1,score:125,patrolSpeed:118,chaseSpeed:160,detect:240,color:'#6b6bb0', flying:true },
+};
+
+function pickWeighted(rng, choices){
+  const total=choices.reduce((sum,c)=>sum+c.weight,0);
+  let roll=rng()*total;
+  for(const choice of choices){
+    roll-=choice.weight;
+    if(roll<=0) return choice.type;
+  }
+  return choices[choices.length-1].type;
+}
+
+function chooseEnemyType(world, level, difficulty, plat, rng){
+  const choices=[
+    {type:'soldier', weight:plat.y<GROUND_Y ? 0.75 : 1.05},
+    {type:'archer', weight:plat.y<GROUND_Y ? 1.0 : 0.45+difficulty*0.03},
+  ];
+  if(world===1&&level>=7&&plat.y<GROUND_Y&&plat.w>=120){
+    choices.push({type:'glider', weight:plat.y<260 ? 0.35 : 0.18});
+  }
+  if(world===2&&level>=3&&plat.y>=340){
+    choices.push({type:'heavy', weight:0.55});
+  }
+  if(world===2&&level>=5&&plat.w>=120&&plat.y>=260){
+    choices.push({type:'bomber', weight:plat.y<GROUND_Y ? 0.45 : 0.28});
+  }
+  return pickWeighted(rng, choices);
+}
+
+function makeEnemySpawn(world, level, difficulty, plat, ex, rng){
+  const type=chooseEnemyType(world, level, difficulty, plat, rng);
+  if(type==='glider'){
+    const homeY=Math.max(120, plat.y-130-Math.floor(rng()*24));
+    return {type, x:ex, y:homeY, homeY, pL:Math.max(0,plat.x-20), pR:plat.x+plat.w+20};
+  }
+  return {type, x:ex, y:plat.y-ENEMY_CFG[type].h, pL:plat.x+5, pR:plat.x+plat.w-5};
+}
 
 function genLevel(world, level) {
   const isBoss = (level===5||level===10);
@@ -233,12 +285,11 @@ function genLevel(world, level) {
     if(rng()<0.35) continue;
     const ex=p.x+40+Math.floor(rng()*(p.w-80));
     if(ex < 300) continue; // safe spawn zone near level start
-    const isArcher = p.y<GROUND_Y && rng()<0.55 || p.y===GROUND_Y && rng()<0.25+(difficulty*0.01);
-    enemies.push({type:isArcher?'archer':'soldier',x:ex,y:p.y-42,pL:p.x+5,pR:p.x+p.w-5});
+    enemies.push(makeEnemySpawn(world, level, difficulty, p, ex, rng));
     // Extra enemy on long platforms in later levels
     if(p.w>200&&difficulty>5&&rng()<0.4){
       const ex2=p.x+p.w-80;
-      enemies.push({type:rng()<0.5?'archer':'soldier',x:ex2,y:p.y-42,pL:p.x+5,pR:p.x+p.w-5});
+      enemies.push(makeEnemySpawn(world, level, difficulty, p, ex2, rng));
     }
   }
 
@@ -281,7 +332,7 @@ function getBossType(world,level){
 // ══════════════════════════════════════════════════════
 let G = { screen:'TITLE', world:1, level:1, score:0, highScore:+localStorage.getItem('pe_hs')||0, lives:3 };
 let levelData = null, cam = {x:0,y:0}, frameN = 0, shake = 0;
-let phil, enemies, projs, boss, checkActivated, checkpointRespawn;
+let phil, enemies, projs, pickups, boss, checkActivated, checkpointRespawn;
 let bossIntroTimer = 0, levelClearTimer = 0, deathTimer = 0;
 let mechFinalTriggered = false;
 let paused = false, pauseSelect = 0, pauseKeyHeld = false;
@@ -300,20 +351,25 @@ function initPhil(sx,sy){
 }
 
 function spawnEnemies(defs){
-  return defs.map(d=>({
-    type:d.type, x:d.x, y:d.y, vx:0,vy:0, w:22,h:42,
-    health:2,maxHealth:2, facingR:false,
-    onGround:false, wasOnGround:false, walkCycle:0,
-    pL:d.pL,pR:d.pR,
-    aiState:'PATROL', alertTimer:0, atkCD:0,
-    aimTimer:0, dead:false, deathTimer:0, alerted:false,
-  }));
+  return defs.map(d=>{
+    const cfg=ENEMY_CFG[d.type]||ENEMY_CFG.soldier;
+    return {
+      type:d.type, x:d.x, y:d.y, vx:0,vy:0, w:cfg.w,h:cfg.h,
+      health:cfg.maxHealth,maxHealth:cfg.maxHealth, facingR:false,
+      onGround:false, wasOnGround:false, walkCycle:(d.x*0.07)%(Math.PI*2),
+      pL:d.pL,pR:d.pR, homeY:d.homeY??d.y,
+      aiState:'PATROL', alertTimer:0, atkCD:0,
+      dead:false, deathTimer:0, alerted:false, stateTimer:0,
+      guardOpen:false, hoverPhase:(d.x*0.031)%(Math.PI*2),
+    };
+  });
 }
 
 function startLevel(){
   levelData = genLevel(G.world, G.level);
   enemies   = spawnEnemies(levelData.enemies);
   projs     = [];
+  pickups   = [];
   boss      = null;
   checkActivated = false;
   checkpointRespawn = null;
@@ -341,13 +397,48 @@ function nextLevel(){
       levelData = genBossArena(3,10,makeRNG(300));
       levelData.worldW=1600;
       levelData.plats=[{x:0,y:GROUND_Y,w:1600,h:20},{x:200,y:340,w:120,h:14},{x:740,y:300,w:120,h:14},{x:1280,y:340,w:120,h:14}];
-      enemies=[];projs=[];parts=[];cam.x=0;cam.y=0;shake=0;
+      enemies=[];projs=[];pickups=[];parts=[];cam.x=0;cam.y=0;shake=0;
       initPhil(120,GROUND_Y-44);
       boss=spawnBoss('mech',1600);
       return;
     }
   }
   startLevel();
+}
+
+function canUseWorldCheat(){
+  return G.screen==='PLAYING' && !paused && phil && !phil.dead;
+}
+function handleWorldCheatKey(e){
+  if(!canUseWorldCheat()){ resetWorldCheat(); return; }
+  if(e.repeat||e.ctrlKey||e.metaKey||e.altKey||e.key.length!==1) return;
+  const key=e.key.toLowerCase();
+  if(key<'a'||key>'z') return;
+  const now=performance.now();
+  if(now-worldCheatLastAt>WORLD_CHEAT_TIMEOUT) worldCheatBuffer='';
+  worldCheatLastAt=now;
+  worldCheatBuffer=(worldCheatBuffer+key).slice(-WORLD_CHEAT.length);
+  if(worldCheatBuffer===WORLD_CHEAT){
+    resetWorldCheat();
+    useWorldCheat();
+  }
+}
+function useWorldCheat(){
+  if(G.world>=2){
+    SFX.pickup();
+    scorePopup(phil.x+phil.w/2,phil.y-18,'FINAL WORLD','#88ddff');
+    return;
+  }
+  const keep={ score:G.score, lives:G.lives, health:phil.health, maxHealth:phil.maxHealth };
+  G.world++;
+  G.level=1;
+  startLevel();
+  G.score=keep.score;
+  G.lives=keep.lives;
+  phil.maxHealth=keep.maxHealth;
+  phil.health=Math.min(keep.health,phil.maxHealth);
+  scorePopup(phil.x+phil.w/2,phil.y-18,`WORLD ${G.world}`,'#88ddff');
+  SFX.checkpoint();
 }
 
 // ══════════════════════════════════════════════════════
@@ -393,8 +484,20 @@ function updatePhil(dt){
     // Hit enemies
     for(const e of enemies){
       if(!e.dead&&!phil.attackedSet.has(e)&&overlap(atkBox,e)){
-        phil.attackedSet.add(e); hitEnemy(e,1);
+        phil.attackedSet.add(e);
+        if(e.type==='glider'&&phil.onGround) continue;
+        if(isHeavyFrontGuarding(e)){
+          burst((phil.facingR?e.x:e.x+e.w),e.y+e.h*0.45,'#88ccff',6,70,0); SFX.block();
+          continue;
+        }
+        hitEnemy(e,1);
       }
+    }
+    // Destroy bombs mid-air
+    for(const p of projs){
+      if(p.dead||p.type!=='bomb'||!overlap(atkBox,p)) continue;
+      p.dead=true;
+      burst(p.x,p.y,'#ffd27a',10,90,30); SFX.block();
     }
     // Hit boss
     if(boss&&!boss.dead&&!phil.attackedSet.has(boss)&&overlapBoss(atkBox)){
@@ -410,7 +513,7 @@ function updatePhil(dt){
   // Projectile hits
   if(phil.invTimer<=0){
     for(const p of projs){
-      if(p.dead||!p.hostile) continue;
+      if(p.dead||!p.hostile||p.type!=='arrow') continue;
       const pb={x:p.x,y:p.y,w:p.w,h:p.h};
       if(!overlap(pb,phil)) continue;
       // Shield block check (only arrows blockable)
@@ -422,7 +525,7 @@ function updatePhil(dt){
     }
   }
 
-  // Enemy contact (soldier)
+  // Enemy contact
   if(phil.invTimer<=0){
     for(const e of enemies){
       if(e.dead) continue;
@@ -499,49 +602,212 @@ function levelComplete(){
 // ══════════════════════════════════════════════════════
 //  ENEMIES
 // ══════════════════════════════════════════════════════
-const DETECT_R=200, E_SPD=80, E_CHS=145;
+const BOMB_RADIUS = 56;
+
+function alertEnemy(e){
+  e.aiState='CHASE'; e.alertTimer=4;
+  if(!e.alerted){ e.alerted=true; SFX.roar(); scorePopup(e.x+e.w/2,e.y-20,'!','#ffee00'); }
+}
+
+function resetEnemy(e){
+  e.aiState='PATROL'; e.alerted=false; e.stateTimer=0; e.guardOpen=false;
+}
+
+function patrolGroundEnemy(e, speed){
+  e.vx=e.facingR?speed:-speed;
+  if(e.x<=e.pL){ e.facingR=true; e.vx=Math.abs(e.vx); }
+  if(e.x+e.w>=e.pR){ e.facingR=false; e.vx=-Math.abs(e.vx); }
+}
+
+function clampGroundEnemy(e){
+  if(e.x<=e.pL){ e.x=e.pL; e.facingR=true; }
+  if(e.x+e.w>=e.pR){ e.x=e.pR-e.w; e.facingR=false; }
+}
+
+function hoverFlyingEnemy(e, targetY){
+  e.vy=(targetY-e.y)*5;
+}
+
+function isHeavyFrontGuarding(e){
+  if(e.type!=='heavy'||e.guardOpen||e.dead) return false;
+  const philMid=phil.x+phil.w/2, enemyMid=e.x+e.w/2;
+  return e.facingR ? philMid>=enemyMid : philMid<=enemyMid;
+}
+
+function updateSoldierAI(e, dx, dist, dt){
+  const cfg=ENEMY_CFG[e.type];
+  if(phil.dead){ resetEnemy(e); patrolGroundEnemy(e,cfg.patrolSpeed); return; }
+  if(e.aiState==='PATROL'){
+    if(dist<cfg.detect) alertEnemy(e);
+    if(e.aiState==='PATROL'){ patrolGroundEnemy(e,cfg.patrolSpeed); return; }
+  }
+  e.alertTimer-=dt;
+  if(dist>cfg.detect*1.8&&e.alertTimer<=0){ resetEnemy(e); patrolGroundEnemy(e,cfg.patrolSpeed); return; }
+  e.facingR=dx>0;
+  e.vx=e.facingR?cfg.chaseSpeed:-cfg.chaseSpeed;
+}
+
+function updateArcherAI(e, dx, dy, dist, dt){
+  const cfg=ENEMY_CFG.archer;
+  if(phil.dead){ resetEnemy(e); patrolGroundEnemy(e,cfg.patrolSpeed); return; }
+  if(e.aiState==='PATROL'){
+    if(dist<cfg.detect) alertEnemy(e);
+    if(e.aiState==='PATROL'){ patrolGroundEnemy(e,cfg.patrolSpeed); return; }
+  }
+  e.alertTimer-=dt;
+  if(dist>cfg.detect*1.8&&e.alertTimer<=0){ resetEnemy(e); patrolGroundEnemy(e,cfg.patrolSpeed); return; }
+  e.facingR=dx>0;
+  if(e.aiState==='ATTACK'){
+    e.vx=0;
+    if(e.stateTimer<=0){ shootArrow(e); e.aiState='CHASE'; }
+    return;
+  }
+  e.vx=dist>140?(e.facingR?cfg.chaseSpeed:-cfg.chaseSpeed):0;
+  if(e.atkCD<=0&&dist<350&&Math.abs(dy)<160){
+    e.aiState='ATTACK'; e.stateTimer=0.55; e.atkCD=1.9; e.vx=0;
+  }
+}
+
+function updateHeavyAI(e, dx, dist, dt){
+  const cfg=ENEMY_CFG.heavy;
+  e.guardOpen=false;
+  if(phil.dead){ resetEnemy(e); patrolGroundEnemy(e,cfg.patrolSpeed); return; }
+  if(e.aiState==='PATROL'){
+    if(dist<cfg.detect) alertEnemy(e);
+    if(e.aiState==='PATROL'){ patrolGroundEnemy(e,cfg.patrolSpeed); return; }
+  }
+  e.alertTimer-=dt;
+  if(e.aiState==='ATTACK'){
+    e.guardOpen=true;
+    e.facingR=dx>0;
+    if(e.stateTimer>0.45) e.vx=0;
+    else if(e.stateTimer>0.15) e.vx=e.facingR?cfg.chaseSpeed*1.25:-cfg.chaseSpeed*1.25;
+    else e.vx*=Math.pow(0.02,dt);
+    if(e.stateTimer<=0){ e.aiState='CHASE'; e.guardOpen=false; }
+    return;
+  }
+  if(dist>cfg.detect*1.9&&e.alertTimer<=0){ resetEnemy(e); patrolGroundEnemy(e,cfg.patrolSpeed); return; }
+  e.facingR=dx>0;
+  if(dist>48) e.vx=e.facingR?cfg.chaseSpeed:-cfg.chaseSpeed;
+  else if(e.atkCD<=0){
+    e.aiState='ATTACK'; e.stateTimer=0.8; e.atkCD=1.6; e.vx=0; e.guardOpen=true;
+  } else e.vx=0;
+}
+
+function updateBomberAI(e, dx, dy, dist, dt){
+  const cfg=ENEMY_CFG.bomber;
+  if(phil.dead){ resetEnemy(e); patrolGroundEnemy(e,cfg.patrolSpeed); return; }
+  if(e.aiState==='PATROL'){
+    if(dist<cfg.detect) alertEnemy(e);
+    if(e.aiState==='PATROL'){ patrolGroundEnemy(e,cfg.patrolSpeed); return; }
+  }
+  e.alertTimer-=dt;
+  if(e.aiState==='ATTACK'){
+    e.facingR=dx>0;
+    e.vx=0;
+    if(e.stateTimer<=0){ throwBomb(e); e.aiState='CHASE'; }
+    return;
+  }
+  if(dist>cfg.detect*1.9&&e.alertTimer<=0){ resetEnemy(e); patrolGroundEnemy(e,cfg.patrolSpeed); return; }
+  e.facingR=dx>0;
+  if(dist<110) e.vx=e.facingR?-(cfg.chaseSpeed*1.35):(cfg.chaseSpeed*1.35);
+  else if(dist>235) e.vx=e.facingR?cfg.chaseSpeed:-cfg.chaseSpeed;
+  else e.vx=0;
+  if(e.atkCD<=0&&dist>125&&dist<320&&Math.abs(dy)<150){
+    e.aiState='ATTACK'; e.stateTimer=0.6; e.atkCD=2.6; e.vx=0;
+  }
+}
+
+function updateGliderAI(e, dx, dy, dist, dt){
+  const cfg=ENEMY_CFG.glider;
+  const hoverY=e.homeY+Math.sin(frameN*0.08+e.hoverPhase)*6;
+  if(phil.dead){
+    resetEnemy(e);
+    e.vx=e.facingR?cfg.patrolSpeed:-cfg.patrolSpeed;
+    hoverFlyingEnemy(e,hoverY);
+    return;
+  }
+  if(e.aiState==='PATROL'){
+    if(dist<cfg.detect) alertEnemy(e);
+    if(e.aiState==='PATROL'){
+      e.vx=e.facingR?cfg.patrolSpeed:-cfg.patrolSpeed;
+      hoverFlyingEnemy(e,hoverY);
+      return;
+    }
+  }
+  e.alertTimer-=dt;
+  if(e.aiState==='ATTACK'){
+    e.vy+=260*dt;
+    if(e.stateTimer<=0||e.y>e.homeY+125||Math.abs(dx)>320) e.aiState='CHASE';
+    return;
+  }
+  if(dist>cfg.detect*1.8&&e.alertTimer<=0){
+    resetEnemy(e);
+    e.vx=e.facingR?cfg.patrolSpeed:-cfg.patrolSpeed;
+    hoverFlyingEnemy(e,hoverY);
+    return;
+  }
+  e.facingR=dx>0;
+  hoverFlyingEnemy(e,e.homeY+Math.sin(frameN*0.12+e.hoverPhase)*4);
+  e.vx=e.facingR?cfg.chaseSpeed:-cfg.chaseSpeed;
+  if(e.atkCD<=0&&dist<155&&Math.abs(dy)<135){
+    const len=Math.hypot(dx,dy)||1;
+    e.aiState='ATTACK'; e.stateTimer=0.75; e.atkCD=1.9;
+    e.vx=dx/len*260; e.vy=dy/len*260;
+  }
+}
 
 function updateEnemies(dt){
   for(const e of enemies){
     if(e.dead){ if(e.deathTimer>0)e.deathTimer-=dt; continue; }
     e.atkCD=Math.max(0,e.atkCD-dt);
-    if(e.aimTimer>0)e.aimTimer-=dt;
+    e.stateTimer=Math.max(0,e.stateTimer-dt);
 
     const dx=(phil.x+phil.w/2)-(e.x+e.w/2);
     const dy=(phil.y+phil.h/2)-(e.y+e.h/2);
     const dist=Math.hypot(dx,dy);
 
-    if(!phil.dead){
-      if(e.aiState==='PATROL'){
-        if(dist<DETECT_R){
-          e.aiState='CHASE'; e.alertTimer=4;
-          if(!e.alerted){ e.alerted=true; SFX.roar(); scorePopup(e.x+e.w/2,e.y-20,'!','#ffee00'); }
-        }
-        e.vx=e.facingR?E_SPD:-E_SPD;
-        if(e.x<=e.pL)e.facingR=true; if(e.x+e.w>=e.pR)e.facingR=false;
-      } else {
-        e.alertTimer-=dt;
-        if(dist>DETECT_R*1.8&&e.alertTimer<=0){ e.aiState='PATROL'; e.alerted=false; }
-        e.facingR=dx>0;
-        if(e.type==='soldier'){
-          e.vx=e.facingR?E_CHS:-E_CHS;
-        } else { // archer
-          if(dist>120){ e.vx=e.facingR?(E_SPD*0.6):-(E_SPD*0.6); }
-          else e.vx=0;
-          // Shoot
-          if(e.aimTimer<=0&&e.atkCD<=0&&dist<350){
-            e.aimTimer=0.7; e.atkCD=1.8;
-            setTimeout(()=>{ if(!e.dead) shootArrow(e); },700);
-          }
-        }
-        if(e.x<=e.pL){e.vx=Math.abs(e.vx);e.facingR=true;}
-        if(e.x+e.w>=e.pR){e.vx=-Math.abs(e.vx);e.facingR=false;}
-      }
-    } else { e.vx=e.facingR?E_SPD:-E_SPD; if(e.x<=e.pL)e.facingR=true; if(e.x+e.w>=e.pR)e.facingR=false; }
+    switch(e.type){
+      case 'archer': updateArcherAI(e,dx,dy,dist,dt); break;
+      case 'heavy':  updateHeavyAI(e,dx,dist,dt); break;
+      case 'bomber': updateBomberAI(e,dx,dy,dist,dt); break;
+      case 'glider': updateGliderAI(e,dx,dy,dist,dt); break;
+      default:       updateSoldierAI(e,dx,dist,dt); break;
+    }
 
-    if(Math.abs(e.vx)>10) e.walkCycle+=dt*7;
+    if(e.type==='glider'){
+      e.x+=e.vx*dt; e.y+=e.vy*dt;
+      if(e.x<=e.pL){ e.x=e.pL; if(e.aiState==='PATROL') e.facingR=true; }
+      if(e.x+e.w>=e.pR){ e.x=e.pR-e.w; if(e.aiState==='PATROL') e.facingR=false; }
+      const minY=Math.max(90,e.homeY-24);
+      const maxY=Math.min(GROUND_Y-80,e.homeY+140);
+      e.y=Math.max(minY,Math.min(e.y,maxY));
+      e.walkCycle+=dt*12;
+      continue;
+    }
+
+    if(Math.abs(e.vx)>10) e.walkCycle+=dt*(e.type==='heavy'?5:7);
     moveCollide(e,levelData.plats,dt);
-    e.x=Math.max(e.pL,Math.min(e.x,e.pR-e.w));
+    clampGroundEnemy(e);
+  }
+}
+
+function spawnHealthPickup(e){
+  pickups.push({type:'health',x:e.x+e.w/2-8,y:e.y+e.h-18,w:16,h:16,heal:1,bob:(e.x*0.05)%(Math.PI*2),dead:false});
+}
+
+function updatePickups(dt){
+  for(let i=pickups.length-1;i>=0;i--){
+    const p=pickups[i];
+    if(p.dead){ pickups.splice(i,1); continue; }
+    p.bob+=dt*4;
+    if(!phil.dead&&phil.health<phil.maxHealth&&overlap(phil,p)){
+      phil.health=Math.min(phil.maxHealth,phil.health+p.heal);
+      p.dead=true;
+      burst(p.x+p.w/2,p.y+p.h/2,'#ff6688',10,80,0);
+      scorePopup(p.x+p.w/2,p.y-8,'+1 HP','#ff6688');
+      SFX.pickup();
+    }
   }
 }
 
@@ -551,7 +817,7 @@ function hitEnemy(e, dmg){
   if(e.health<=0){
     e.dead=true; e.deathTimer=1.2;
     combo=Math.min(combo+1,COMBO_MAX); comboTimer=COMBO_WINDOW;
-    const base=e.type==='archer'?150:100;
+    const base=(ENEMY_CFG[e.type]||ENEMY_CFG.soldier).score;
     const pts=base*combo;
     G.score+=pts;
     const popCol=combo>=5?'#ff88ff':combo>=3?'#ffaa00':'#ffd700';
@@ -559,6 +825,7 @@ function hitEnemy(e, dmg){
     scorePopup(e.x+e.w/2,e.y-20,popTxt,popCol);
     if(combo>=3){ burst(e.x+e.w/2,e.y+e.h/2,combo>=5?'#ff88ff':'#ffaa00',16,150,300); SFX.coin(); }
     burst(e.x+e.w/2,e.y+e.h/2,'#ff4422',14,130,350); SFX.die();
+    if(e.type==='heavy'&&Math.random()<0.5) spawnHealthPickup(e);
   }
 }
 
@@ -569,6 +836,30 @@ function shootArrow(e){
     vx:dx/len*spd,vy:dy/len*spd-40,w:18,h:5,dead:false,grav:350});
 }
 
+function throwBomb(e){
+  const sx=e.x+(e.facingR?e.w:0), sy=e.y+16;
+  const tx=phil.x+phil.w/2, ty=phil.y+phil.h/2;
+  const dx=tx-sx, dy=ty-sy;
+  const grav=650;
+  const t=Math.min(1.05,Math.max(0.55,Math.abs(dx)/220));
+  const vx=Math.max(-260,Math.min(260,dx/t));
+  const vy=Math.max(-560,Math.min(-220,(dy-0.5*grav*t*t)/t));
+  projs.push({type:'bomb',hostile:true,x:sx,y:sy,vx,vy,w:12,h:12,dead:false,grav,radius:BOMB_RADIUS,rot:0});
+}
+
+function explodeBomb(p){
+  if(p.dead) return;
+  p.dead=true; shake=Math.max(shake,0.55); SFX.bomb();
+  burst(p.x,p.y,'#ff8844',18,180,140);
+  burst(p.x,p.y,'#ffaa66',10,90,0);
+  if(phil.dead||phil.invTimer>0) return;
+  const dx=(phil.x+phil.w/2)-p.x, dy=(phil.y+phil.h/2)-p.y;
+  if(Math.hypot(dx,dy)<=p.radius){
+    philTakeDmg(1.0);
+    phil.vx=dx<0?-260:260; phil.vy=-280;
+  }
+}
+
 // ══════════════════════════════════════════════════════
 //  PROJECTILES
 // ══════════════════════════════════════════════════════
@@ -577,7 +868,16 @@ function updateProjs(dt){
     const p=projs[i];
     if(p.dead){projs.splice(i,1);continue;}
     p.x+=p.vx*dt; p.y+=p.vy*dt; if(p.grav)p.vy+=p.grav*dt;
-    if(p.y>H+50||p.x<-50||p.x>levelData.worldW+50){projs.splice(i,1);continue;}
+    if(p.type==='bomb') p.rot+=(p.vx>=0?1:-1)*dt*8;
+    if(p.y>H+80||p.x<-80||p.x>levelData.worldW+80){projs.splice(i,1);continue;}
+    if(p.type==='bomb'){
+      if(!phil.dead&&overlap(p,phil)){ explodeBomb(p); }
+      if(!p.dead){
+        for(const pl of levelData.plats){ if(overlap(p,pl)){ explodeBomb(p); break; } }
+      }
+      if(p.dead){ projs.splice(i,1); }
+      continue;
+    }
     for(const pl of levelData.plats){ if(overlap(p,pl)){p.dead=true;break;} }
   }
 }
@@ -1061,9 +1361,9 @@ function heartPath(cx,cy){
   ctx.lineTo(cx,cy+9); ctx.closePath();
 }
 function drawHUD(){
-  ctx.fillStyle='rgba(0,0,0,0.5)'; ctx.fillRect(0,0,W,38);
+  ctx.fillStyle='rgba(0,0,0,0.5)'; ctx.fillRect(0,0,W,48);
   // Hearts
-  ctx.font='bold 13px monospace'; ctx.fillStyle='#cc4444'; ctx.textAlign='left'; ctx.fillText('HP:',10,24);
+  ctx.font='bold 13px monospace'; ctx.fillStyle='#cc4444'; ctx.textAlign='left'; ctx.fillText('HP:',10,20);
   for(let i=0;i<5;i++){
     const val=phil.health-i;
     const hx=48+i*30, hy=16;
@@ -1077,22 +1377,27 @@ function drawHUD(){
   }
   // Score
   ctx.fillStyle='#ffd700'; ctx.font='bold 14px monospace'; ctx.textAlign='left';
-  ctx.fillText('SCORE: '+G.score,200,24);
+  ctx.fillText('SCORE: '+G.score,200,20);
   // Lives
   ctx.fillStyle='#88aaff'; ctx.font='bold 13px monospace';
-  ctx.fillText('LIVES: '+G.lives,360,24);
+  ctx.fillText('LIVES: '+G.lives,360,20);
   // Level indicator
-  ctx.textAlign='center'; ctx.fillStyle='#ccaaff'; ctx.font='13px monospace';
+  ctx.textAlign='center'; ctx.fillStyle='#ccaaff'; ctx.font='12px monospace';
   const isBoss=(G.level===5||G.level===10);
-  ctx.fillText((G.screen==='FINAL_BOSS_INTRO'||boss?.type==='mech')?'★ FINAL BOSS ★':`WORLD ${G.world} - ${WORLDS[G.world].name} - LEVEL ${G.level}${isBoss?' ⚠ BOSS':''} `,W/2,24);
+  ctx.fillText((G.screen==='FINAL_BOSS_INTRO'||boss?.type==='mech')?'★ FINAL BOSS ★':`WORLD ${G.world} - ${WORLDS[G.world].name} - LEVEL ${G.level}${isBoss?' ⚠ BOSS':''} `,W/2,38);
   // Controls hint
-  ctx.fillStyle='rgba(180,160,200,0.5)'; ctx.font='10px monospace';
-  ctx.fillText('A/D: Move   W/Space: Jump   Z: Sword   X: Shield   Esc: Pause',W/2,H-6);
+  const controlsHint='A/D: Move   W/Space: Jump   Z: Sword   X: Shield   Esc: Pause';
+  ctx.font='bold 10px monospace';
+  const hintW=ctx.measureText(controlsHint).width;
+  ctx.fillStyle='rgba(0,0,0,0.45)';
+  ctx.fillRect(W/2-hintW/2-8,H-19,hintW+16,15);
+  ctx.fillStyle='rgba(245,245,255,0.92)';
+  ctx.fillText(controlsHint,W/2,H-8);
   ctx.textAlign='left';
 
   // Boss health bar
   if(boss&&!boss.dead){
-    const bw=300, bh=14, bx=(W-bw)/2, by=44;
+    const bw=300, bh=14, bx=(W-bw)/2, by=54;
     ctx.fillStyle='rgba(0,0,0,0.6)'; ctx.fillRect(bx-2,by-2,bw+4,bh+4);
     ctx.fillStyle='#330000'; ctx.fillRect(bx,by,bw,bh);
     const pct=Math.max(0,boss.health/boss.maxHealth);
@@ -1120,7 +1425,7 @@ function drawHUD(){
   if(levelData.checkX&&!levelData.isBoss){
     ctx.fillStyle=checkActivated?'rgba(70,150,255,0.8)':'rgba(100,100,150,0.5)';
     ctx.font='11px monospace'; ctx.textAlign='right';
-    ctx.fillText(checkActivated?'CHECKPOINT ✓':'CHECKPOINT',W-10,24);
+    ctx.fillText(checkActivated?'CHECKPOINT ✓':'CHECKPOINT',W-10,20);
     ctx.textAlign='left';
   }
 }
@@ -1148,7 +1453,7 @@ function drawFlag(x, y, color, waving){
 // ─── STICKMAN DRAW ───
 function drawStickman(x,y,w,h,opts){
   const {facingR,walkCycle,attacking,atkTimer,atkDur,shielding,
-         color,swordColor,invTimer,dead,isPlayer,scale,isArcher,health,maxHealth,type} = opts;
+         color,swordColor,shieldColor,invTimer,dead,isPlayer,scale,isArcher,health,maxHealth,type} = opts;
   const sc=scale||1;
   const cx=x+w/2, by=y+h;
   const dir=facingR?1:-1;
@@ -1163,6 +1468,16 @@ function drawStickman(x,y,w,h,opts){
 
   // Head
   ctx.beginPath(); ctx.arc(0,-bodyH-headR,headR,0,Math.PI*2); ctx.stroke();
+
+  if(type==='glider'){
+    const flap=Math.sin(walkCycle*1.8)*5*sc;
+    ctx.strokeStyle='rgba(215,235,255,0.85)'; ctx.lineWidth=Math.max(1.5,2*sc);
+    ctx.beginPath();
+    ctx.moveTo(0,-bodyH+6); ctx.lineTo(-18*sc,-bodyH-2-flap); ctx.lineTo(-28*sc,-bodyH+8);
+    ctx.moveTo(0,-bodyH+6); ctx.lineTo(18*sc,-bodyH-2+flap); ctx.lineTo(28*sc,-bodyH+8);
+    ctx.stroke();
+    ctx.strokeStyle=color; ctx.lineWidth=lw;
+  }
 
   if(isPlayer){
     // Eyes
@@ -1193,7 +1508,7 @@ function drawStickman(x,y,w,h,opts){
     const shX=dir*(armL+6); const shY=-bodyH+4;
     ctx.beginPath(); ctx.moveTo(0,-bodyH+5); ctx.lineTo(shX,shY); ctx.stroke();
     // Shield rect
-    ctx.fillStyle='#4466cc'; ctx.strokeStyle='#2244aa'; ctx.lineWidth=2;
+    ctx.fillStyle=shieldColor||'#4466cc'; ctx.strokeStyle=shieldColor?'#4a3314':'#2244aa'; ctx.lineWidth=2;
     const shieldX=shX+dir*4-6, shieldY=shY-12;
     ctx.fillRect(shieldX,shieldY,14,22);
     ctx.strokeRect(shieldX,shieldY,14,22);
@@ -1228,8 +1543,15 @@ function drawStickman(x,y,w,h,opts){
     if(isPlayer){ ctx.strokeStyle=swordColor||'#c8eeff'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(a1x,a1y); ctx.lineTo(a1x+dir*20,a1y-9); ctx.stroke(); }
     // Archer bow
     if(isArcher){ ctx.strokeStyle='#8B4513'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(a2x-dir*2,a2y-5,10,dir<0?-Math.PI*.6:-Math.PI*.4,dir<0?Math.PI*.6:Math.PI*.4,dir>0); ctx.stroke(); ctx.strokeStyle='rgba(200,200,200,0.7)'; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(a2x-dir*2,a2y-14); ctx.lineTo(a2x-dir*2,a2y+4); ctx.stroke(); }
+    if(type==='bomber'){
+      ctx.fillStyle='#222';
+      ctx.beginPath(); ctx.arc(a2x-dir*2,a2y-3,4.5,0,Math.PI*2); ctx.fill();
+      ctx.strokeStyle='#ffcc66'; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(a2x+dir*1,a2y-7); ctx.lineTo(a2x+dir*4,a2y-12); ctx.stroke();
+      ctx.strokeStyle=color; ctx.lineWidth=lw;
+    }
     // Soldier spear
-    if(!isArcher&&!isPlayer){ ctx.strokeStyle='#8B6914'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(a1x,a1y); ctx.lineTo(a1x+dir*26,a1y-12); ctx.stroke(); ctx.fillStyle='#bbaa22'; ctx.beginPath(); ctx.moveTo(a1x+dir*26,a1y-12); ctx.lineTo(a1x+dir*32,a1y-20); ctx.lineTo(a1x+dir*20,a1y-14); ctx.fill(); }
+    if(!isArcher&&!isPlayer&&type!=='bomber'&&type!=='glider'){ ctx.strokeStyle='#8B6914'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(a1x,a1y); ctx.lineTo(a1x+dir*26,a1y-12); ctx.stroke(); ctx.fillStyle='#bbaa22'; ctx.beginPath(); ctx.moveTo(a1x+dir*26,a1y-12); ctx.lineTo(a1x+dir*32,a1y-20); ctx.lineTo(a1x+dir*20,a1y-14); ctx.fill(); }
   }
 
   // Giant boss: add club
@@ -1491,16 +1813,44 @@ function drawBoss(){
   }
 }
 
-function drawArrows(){
-  ctx.fillStyle='#c89030'; ctx.strokeStyle='#8B6914'; ctx.lineWidth=1;
+function drawProjectiles(){
   for(const p of projs){
     if(p.dead) continue;
     const px=p.x-cam.x, py=p.y-cam.y;
+    if(p.type==='bomb'){
+      ctx.save();
+      ctx.translate(px,py); ctx.rotate(p.rot||0);
+      ctx.fillStyle='rgba(255,180,80,0.2)';
+      ctx.beginPath(); ctx.arc(0,0,9,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle='#222'; ctx.strokeStyle='#555'; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.arc(0,0,6,0,Math.PI*2); ctx.fill(); ctx.stroke();
+      ctx.strokeStyle='#ffcc66'; ctx.lineWidth=1.5;
+      ctx.beginPath(); ctx.moveTo(2,-4); ctx.lineTo(7,-10); ctx.stroke();
+      ctx.fillStyle='#ff8833';
+      ctx.beginPath(); ctx.arc(8,-11,2.4,0,Math.PI*2); ctx.fill();
+      ctx.restore();
+      continue;
+    }
     const ang=Math.atan2(p.vy,p.vx);
     ctx.save(); ctx.translate(px,py); ctx.rotate(ang);
+    ctx.fillStyle='#c89030'; ctx.strokeStyle='#8B6914'; ctx.lineWidth=1;
     ctx.fillRect(-9,-2,18,4);
     ctx.fillStyle='#888'; ctx.fillRect(9,-2,4,4);
     ctx.fillStyle='#4a2800'; ctx.beginPath(); ctx.moveTo(-9,0); ctx.lineTo(-13,-4); ctx.lineTo(-13,4); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+}
+
+function drawPickups(){
+  for(const p of pickups){
+    if(p.dead) continue;
+    const px=p.x-cam.x, py=p.y-cam.y+Math.sin(p.bob)*3;
+    ctx.save();
+    ctx.fillStyle='rgba(255,255,255,0.1)';
+    ctx.fillRect(px+1,py+1,14,14);
+    ctx.fillStyle='#aa2233'; ctx.fillRect(px+3,py+3,10,10);
+    ctx.fillStyle='#ff6677'; ctx.fillRect(px+4,py+4,8,8);
+    ctx.fillStyle='#ffeeee'; ctx.fillRect(px+7,py+5,2,6); ctx.fillRect(px+5,py+7,6,2);
     ctx.restore();
   }
 }
@@ -1670,6 +2020,7 @@ function loop(ts){
       updateEnemies(dt);
       updateBoss(dt);
       updateProjs(dt);
+      updatePickups(dt);
       updateCam(dt);
       updateParts(dt);
     }
@@ -1699,7 +2050,8 @@ function loop(ts){
   }
 
   drawBoss();
-  drawArrows();
+  drawProjectiles();
+  drawPickups();
   drawParts();
 
   // Draw enemies
@@ -1707,15 +2059,17 @@ function loop(ts){
     if(e.dead&&e.deathTimer<=0) continue;
     ctx.save();
     if(e.dead) ctx.globalAlpha=Math.max(0,e.deathTimer/1.2);
+    const cfg=ENEMY_CFG[e.type]||ENEMY_CFG.soldier;
     drawStickman(e.x,e.y,e.w,e.h,{
       facingR:e.facingR, walkCycle:e.walkCycle,
-      attacking:false, atkTimer:0, atkDur:1,
-      shielding:false,
-      color:e.type==='archer'?'#4a6a20':'#3a5a10',
-      swordColor:'#888', invTimer:0,
-      dead:e.dead, isPlayer:false, scale:1,
+      attacking:e.type==='heavy'&&e.aiState==='ATTACK', atkTimer:e.stateTimer, atkDur:0.8,
+      shielding:e.type==='heavy'&&!e.guardOpen,
+      color:cfg.color,
+      swordColor:e.type==='heavy'?'#bba56a':'#888', shieldColor:cfg.shieldColor, invTimer:0,
+      dead:e.dead, isPlayer:false, scale:e.type==='heavy'?1.08:(e.type==='glider'?0.95:1),
       isArcher:e.type==='archer',
       health:e.health, maxHealth:e.maxHealth,
+      type:e.type,
     });
     ctx.restore();
   }
