@@ -423,21 +423,47 @@ function handleWorldCheatKey(e){
     useWorldCheat();
   }
 }
-function useWorldCheat(){
-  if(G.world>=2){
-    SFX.pickup();
-    scorePopup(phil.x+phil.w/2,phil.y-18,'FINAL WORLD','#88ddff');
-    return;
-  }
-  const keep={ score:G.score, lives:G.lives, health:phil.health, maxHealth:phil.maxHealth };
-  G.world++;
-  G.level=1;
-  startLevel();
+function restoreWorldCheatState(keep){
   G.score=keep.score;
   G.lives=keep.lives;
   phil.maxHealth=keep.maxHealth;
   phil.health=Math.min(keep.health,phil.maxHealth);
-  scorePopup(phil.x+phil.w/2,phil.y-18,`WORLD ${G.world}`,'#88ddff');
+}
+function startFinalBossLevel(){
+  G.screen='FINAL_BOSS_INTRO'; bossIntroTimer=3.5;
+  levelData = genBossArena(3,10,makeRNG(300));
+  levelData.worldW=1600;
+  levelData.plats=[{x:0,y:GROUND_Y,w:1600,h:20},{x:200,y:340,w:120,h:14},{x:740,y:300,w:120,h:14},{x:1280,y:340,w:120,h:14}];
+  enemies=[];projs=[];pickups=[];parts=[];cam.x=0;cam.y=0;shake=0;
+  initPhil(120,GROUND_Y-44);
+  boss=spawnBoss('mech',1600);
+}
+function useWorldCheat(){
+  const keep={ score:G.score, lives:G.lives, health:phil.health, maxHealth:phil.maxHealth };
+  if(boss?.type==='mech'||G.level>10){
+    SFX.pickup();
+    scorePopup(phil.x+phil.w/2,phil.y-18,'FINAL BATTLE','#88ddff');
+    return;
+  }
+  if(G.world<2){
+    G.world++;
+    G.level=1;
+    startLevel();
+    restoreWorldCheatState(keep);
+    scorePopup(phil.x+phil.w/2,phil.y-18,`WORLD ${G.world}`,'#88ddff');
+    SFX.checkpoint();
+    return;
+  }
+  G.level++;
+  if(G.level>10){
+    startFinalBossLevel();
+    restoreWorldCheatState(keep);
+    scorePopup(phil.x+phil.w/2,phil.y-18,'FINAL BOSS','#88ddff');
+  } else {
+    startLevel();
+    restoreWorldCheatState(keep);
+    scorePopup(phil.x+phil.w/2,phil.y-18,`LEVEL ${G.level}`,'#88ddff');
+  }
   SFX.checkpoint();
 }
 
