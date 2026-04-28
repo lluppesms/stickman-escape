@@ -89,9 +89,9 @@ const SFX = {
 // ══════════════════════════════════════════════════════
 const keys={}, touches={L:false,R:false,J:false,A:false,S:false,start:false};
 const isTouchDevice='ontouchstart' in window;
-const WORLD_CHEAT='xavier', WORLD_CHEAT_TIMEOUT=1400;
-let worldCheatBuffer='', worldCheatLastAt=0;
-function resetWorldCheat(){ worldCheatBuffer=''; worldCheatLastAt=0; }
+const WORLD_CHEAT='xavier', MOBILE_WORLD_CHEAT='jjsjjsjjs', WORLD_CHEAT_TIMEOUT=1400;
+let worldCheatBuffer='', mobileWorldCheatBuffer='', worldCheatLastAt=0;
+function resetWorldCheat(){ worldCheatBuffer=''; mobileWorldCheatBuffer=''; worldCheatLastAt=0; }
 document.addEventListener('keydown',e=>{
   initAC(); keys[e.code]=true;
   if(['Space','ArrowUp','ArrowDown'].includes(e.code))e.preventDefault();
@@ -100,12 +100,12 @@ document.addEventListener('keydown',e=>{
 document.addEventListener('keyup',e=>keys[e.code]=false);
 canvas.addEventListener('touchstart',e=>{ e.preventDefault(); initAC(); touches.start=true; },{passive:false});
 canvas.addEventListener('touchend',()=>{ touches.start=false; });
-function bindT(id,p){ const el=document.getElementById(id);
-  el.addEventListener('touchstart',e=>{e.preventDefault();initAC();touches[p]=true},{passive:false});
+function bindT(id,p,onPress){ const el=document.getElementById(id);
+  el.addEventListener('touchstart',e=>{e.preventDefault();initAC();touches[p]=true; onPress&&onPress()},{passive:false});
   el.addEventListener('touchend',e=>{e.preventDefault();touches[p]=false},{passive:false});
   el.addEventListener('touchcancel',()=>touches[p]=false); }
 if(isTouchDevice){ document.getElementById('touch').style.display='block';
-  bindT('tL','L');bindT('tR','R');bindT('tJ','J');bindT('tA','A');bindT('tS','S'); }
+  bindT('tL','L');bindT('tR','R');bindT('tJ','J',()=>handleWorldCheatTouch('j'));bindT('tA','A');bindT('tS','S',()=>handleWorldCheatTouch('s')); }
 const In={
   left:  ()=>keys['ArrowLeft'] ||keys['KeyA']||touches.L,
   right: ()=>keys['ArrowRight']||keys['KeyD']||touches.R,
@@ -409,20 +409,25 @@ function nextLevel(){
 function canUseWorldCheat(){
   return G.screen==='PLAYING' && !paused && phil && !phil.dead;
 }
-function handleWorldCheatKey(e){
+function handleWorldCheatInput(key){
   if(!canUseWorldCheat()){ resetWorldCheat(); return; }
-  if(e.repeat||e.ctrlKey||e.metaKey||e.altKey||e.key.length!==1) return;
-  const key=e.key.toLowerCase();
-  if(key<'a'||key>'z') return;
   const now=performance.now();
-  if(now-worldCheatLastAt>WORLD_CHEAT_TIMEOUT) worldCheatBuffer='';
+  if(now-worldCheatLastAt>WORLD_CHEAT_TIMEOUT) resetWorldCheat();
   worldCheatLastAt=now;
   worldCheatBuffer=(worldCheatBuffer+key).slice(-WORLD_CHEAT.length);
-  if(worldCheatBuffer===WORLD_CHEAT){
+  mobileWorldCheatBuffer=(mobileWorldCheatBuffer+key).slice(-MOBILE_WORLD_CHEAT.length);
+  if(worldCheatBuffer===WORLD_CHEAT||mobileWorldCheatBuffer===MOBILE_WORLD_CHEAT){
     resetWorldCheat();
     useWorldCheat();
   }
 }
+function handleWorldCheatKey(e){
+  if(e.repeat||e.ctrlKey||e.metaKey||e.altKey||e.key.length!==1) return;
+  const key=e.key.toLowerCase();
+  if(key<'a'||key>'z') return;
+  handleWorldCheatInput(key);
+}
+function handleWorldCheatTouch(key){ handleWorldCheatInput(key); }
 function restoreWorldCheatState(keep){
   G.score=keep.score;
   G.lives=keep.lives;
