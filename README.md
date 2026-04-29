@@ -1,20 +1,40 @@
-# Phil's Escape
+# 🥷 Phil's Escape
 
-A browser-based platformer game built with vanilla HTML5 Canvas and JavaScript — no dependencies, no build step, just open `index.html` and play.
+> *One stickman. Six worlds. Zero mercy.*
 
-Phil is a warrior from the Stickman Army who's trying to break free. Fight through six worlds packed with enemies, mini-bosses, and world bosses to earn your freedom.
+[![Play Now](https://img.shields.io/badge/▶%20Play%20Now-Online-brightgreen?style=for-the-badge)](https://natethedrummer.github.io/stickman-escape/)
+[![No Dependencies](https://img.shields.io/badge/dependencies-zero-blue?style=for-the-badge)](index.html)
+[![Single File](https://img.shields.io/badge/single--file-index.html-orange?style=for-the-badge)](index.html)
 
 ---
 
-## Play
+![Phil's Escape – Title Screen](https://github.com/user-attachments/assets/b278f32e-e827-4bf1-9f42-7fcc83ac44c4)
+
+---
+
+**Phil** is a warrior from the Stickman Army who's tired of taking orders. 🗡️ Slash enemies, 🛡️ block arrows, 💣 dodge bombs, and fight your way through **six brutal worlds** — Forest, Desert, Snow Peaks, Factory 999, the Mines, and Berlin — before facing the ultimate **Giant Stickman Mech** in a final showdown. Can you earn your freedom? 🏃
+
+- 🌲 **6 themed worlds** with 10 levels each
+- 👹 **13 boss fights** — mini-bosses AND world bosses
+- ⚔️ **Sword + shield** dual combat — timing is everything
+- 💀 **5 enemy types**, from archers to bomb throwers to diving gliders
+- 📱 **Works everywhere** — desktop keyboard or mobile touch controls
+- 🔊 **Synthesized audio** — no sound files, all generated in-browser
+- 🏆 **High score** saved locally so you can beat yourself
+
+No installs. No accounts. No nonsense. Just open the page and play. 🎮
+
+---
+
+## 🎮 Play
 
 **Play online:** https://natethedrummer.github.io/stickman-escape/
 
-Or open `index.html` in any modern browser (Chrome, Firefox, Safari, Edge).
+Or download and open `index.html` in any modern browser (Chrome, Firefox, Safari, Edge).
 
 ---
 
-## Controls
+## 🕹️ Controls
 
 | Action | Keys |
 |--------|------|
@@ -30,7 +50,7 @@ Mobile touch controls appear automatically on touch devices.
 
 ---
 
-## Game Structure
+## 🗺️ Game Structure
 
 ### Worlds
 
@@ -69,7 +89,7 @@ Mobile touch controls appear automatically on touch devices.
 
 ---
 
-## Features
+## ✨ Features
 
 - Procedurally generated levels (seeded per world + level number — consistent every run)
 - 5-heart health system with half-heart damage
@@ -84,7 +104,7 @@ Mobile touch controls appear automatically on touch devices.
 
 ---
 
-## Roadmap
+## 🛣️ Roadmap
 
 The current game is a complete v1.0 experience. Here's what's planned:
 
@@ -119,13 +139,13 @@ All open issues and discussion live in the [GitHub Issues](https://github.com/na
 
 ---
 
-## Version History
+## 📜 Version History
 
 See [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
-## Tech
+## 🔧 Tech
 
 - Pure HTML5 Canvas + vanilla JavaScript
 - No frameworks, no dependencies, no build tools
