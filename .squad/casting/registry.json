@@ -1,0 +1,39 @@
+{
+  "agents": {
+    "squidward": {
+      "persistent_name": "Squidward",
+      "universe": "SpongeBob SquarePants",
+      "created_at": "2026-04-28T18:40:02Z",
+      "legacy_named": false,
+      "status": "active"
+    },
+    "sandy": {
+      "persistent_name": "Sandy",
+      "universe": "SpongeBob SquarePants",
+      "created_at": "2026-04-28T18:40:02Z",
+      "legacy_named": false,
+      "status": "active"
+    },
+    "spongebob": {
+      "persistent_name": "SpongeBob",
+      "universe": "SpongeBob SquarePants",
+      "created_at": "2026-04-28T18:40:02Z",
+      "legacy_named": false,
+      "status": "active"
+    },
+    "patrick": {
+      "persistent_name": "Patrick",
+      "universe": "SpongeBob SquarePants",
+      "created_at": "2026-04-28T18:40:02Z",
+      "legacy_named": false,
+      "status": "active"
+    },
+    "mrkrabs": {
+      "persistent_name": "MrKrabs",
+      "universe": "SpongeBob SquarePants",
+      "created_at": "2026-04-28T18:40:02Z",
+      "legacy_named": false,
+      "status": "active"
+    }
+  }
+}
