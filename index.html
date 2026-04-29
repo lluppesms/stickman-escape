@@ -1326,8 +1326,22 @@ function overlapBoss(box){
 }
 
 function hitBoss(dmg, hitBox=null){
-  if(!boss||boss.invTimer>0||boss.hidden) return;
+  if(!boss||boss.invTimer>0) return;
   const target=getBossHitTarget(hitBox||{x:boss.x,y:boss.y,w:boss.w,h:boss.h}) || boss;
+  if(!target) return;
+  if(boss.type==='revenant'&&boss.twins?.length){
+    // Hit a half — reform into whole boss and continue the fight
+    boss.x=target.x; boss.y=target.y; boss.w=68; boss.h=80;
+    boss.hidden=false; boss.twins=null;
+    boss.facingR=target.facingR; boss.walkCycle=0;
+    boss.aiState='WALK'; boss.stTimer=0.6;
+    shake=0.6; SFX.bossHit();
+    burst(target.x+target.w/2,target.y+target.h/2,'#ff4444',12,140,260);
+    boss.health-=dmg; boss.invTimer=0.15;
+    if(boss.health<=0&&!boss.dead){ bossKilled(); }
+    return;
+  }
+  if(boss.hidden) return;
   boss.health-=dmg; boss.invTimer=0.1; shake=0.4; SFX.bossHit();
   burst(target.x+target.w/2,target.y+target.h/2,'#ffaa44',8,100,200);
   if(boss.health<=0&&!boss.dead){ bossKilled(); return; }
@@ -1338,6 +1352,7 @@ function hitBoss(dmg, hitBox=null){
     burst(focus.x+focus.w/2,focus.y+focus.h/2,'#ff0000',20,180,300);
     if(boss.type==='revenant'&&!boss.twins){
       boss.hidden=true;
+      boss.invTimer=0;
       boss.twins=[
         { x:220,y:GROUND_Y-76,w:52,h:76,vx:0,vy:0,state:'IDLE',timer:0.8,facingR:true,variant:'bone',dead:false,walkCycle:0,pL:80,pR:levelData.worldW/2-40,actionDone:false },
         { x:levelData.worldW-272,y:GROUND_Y-76,w:52,h:76,vx:0,vy:0,state:'IDLE',timer:0.8,facingR:false,variant:'brain',dead:false,walkCycle:0,pL:levelData.worldW/2+40,pR:levelData.worldW-80,actionDone:false },

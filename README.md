@@ -54,15 +54,15 @@ Mobile touch controls appear automatically on touch devices.
 
 ### Worlds
 
-| World | Theme | Levels | Mini Boss (Lvl 5) | World Boss (Lvl 10) |
-|-------|-------|--------|-------------------|----------------------|
-| 1 | Forest | 10 | Stickman Giant | Green Anaconda |
-| 2 | Desert | 10 | Stickman Giant | Giant Robot Lizard |
-| 3 | Snow Peaks | 10 | Frost Warden | Yeti |
-| 4 | Factory 999 | 10 | Foreman-9 | Bone Revenant |
-| 5 | Mines | 10 | Tunnel Fiend | Mole Mk.999 |
-| 6 | Berlin | 10 | Riot Captain | FBI Agent |
-| — | Final | — | — | Giant Stickman Mech |
+| World | Theme | Levels | Mini Boss (Lvl 5) | World Boss (Lvl 10) | Hazards |
+|-------|-------|--------|-------------------|----------------------|---------|
+| 1 | Forest | 10 | Stickman Giant | Green Anaconda | Moving Saws (level 7+) |
+| 2 | Desert | 10 | Stickman Giant | Giant Robot Lizard | Lava Pits (level 2+), Falling Rocks (level 4+) |
+| 3 | Snow Peaks | 10 | Frost Warden | Yeti | — |
+| 4 | Factory 999 | 10 | Foreman-9 | Bone Revenant | — |
+| 5 | Mines | 10 | Tunnel Fiend | Mole Mk.999 | — |
+| 6 | Berlin | 10 | Riot Captain | FBI Agent | — |
+| — | Final | — | — | Giant Stickman Mech | — |
 
 ### Flags
 - 🔵 **Blue flag** — Checkpoint (saves your respawn point, awards +100 score)
