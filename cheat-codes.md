@@ -28,13 +28,13 @@ This document lists all available cheat codes in Phil's Escape. Cheat codes can 
 | Platform | Input |
 |----------|-------|
 | **Keyboard** | `D` `R` `U` `M` (type quickly) |
-| **Mobile/Touch** | ▶ ▶ ▶ ▲ ▲ ▲ |
+| **Mobile/Touch** | 🛡 🛡 🛡 ▲ ▲ ▲ |
 
 **Notes:**
 - Each button press must be entered within **1.4 seconds** of the previous one, or the code resets
 - Cannot be used during the final boss fight
 - Text popup will show `LEVEL X`, `WORLD X`, or `FINAL BOSS` when activated
-- For mobile: Right button is ▶, Jump button is ▲
+- For mobile: Shield button is 🛡, Jump button is ▲
 
 ---
 
